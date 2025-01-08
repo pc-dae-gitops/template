@@ -1,0 +1,80 @@
+apiVersion: gitops.weave.works/v1alpha1
+  kind: GitopsCluster
+  metadata:
+    name: "${target_cluster}"
+    namespace: default
+  spec:
+    capiClusterRef:
+      name: "${target_cluster}"
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: ${target_cluster}
+  namespace: default
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+      - 10.120.0.0/20 
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: AWSManagedControlPlane
+    name: ${target_cluster}-control-plane
+  infrastructureRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: AWSManagedControlPlane
+    name: ${target_cluster}-control-plane
+--- 
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: AWSManagedControlPlane
+metadata:
+  name: ${target_cluster}-control-plane
+  namespace: default
+spec:
+  # bastion:
+  #   enabled: true
+  addons:
+  - conflictResolution: overwrite
+    name: vpc-cni
+    version: v1.12.6-eksbuild.2
+  additionalTags: 
+    creator: ${awsTagCreator}
+    customer: ${awsTagCustomer}
+    projectGid: \"${awsTagProjectGid}\"
+  region: ${aws_region}
+  sshKeyName: ${awsKeyPairName}
+  version: ${k8s_version}
+  eksClusterName: ${target_cluster}
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachinePool
+metadata:
+  name: ${target_cluster}-pool-0
+  namespace: default
+spec:
+  clusterName: ${target_cluster}
+  replicas: ${worker_machines}
+  template:
+    spec:
+      bootstrap:
+        dataSecretName: ""
+      clusterName: ${target_cluster}
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: AWSManagedMachinePool
+        name: ${target_cluster}-pool-0
+ --- 
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: AWSManagedMachinePool
+metadata:
+  name: ${target_cluster}-pool-0
+  namespace: default
+spec:
+  scaling:
+    minSize: 1
+    maxSize: 3
+  updateConfig:
+    maxUnavailable: 1
+  remoteAccess: 
+    public: true
